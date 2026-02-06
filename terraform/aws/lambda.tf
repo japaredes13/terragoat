@@ -1,6 +1,18 @@
+# --- KMS para cifrado de variables de entorno de Lambda ---
+resource "aws_kms_key" "lambda_env" {
+  description             = "${local.resource_prefix.value}-lambda-env"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+}
+
+resource "aws_kms_alias" "lambda_env" {
+  name          = "alias/${local.resource_prefix.value}-lambda-env"
+  target_key_id = aws_kms_key.lambda_env.key_id
+}
+
+# --- IAM Role para la Lambda ---
 resource "aws_iam_role" "iam_for_lambda" {
   name = "${local.resource_prefix.value}-analysis-lambda"
-
 
   assume_role_policy = <<EOF
 {
@@ -17,6 +29,7 @@ resource "aws_iam_role" "iam_for_lambda" {
   ]
 }
 EOF
+
   tags = {
     git_commit           = "e6d83b21346fe85d4fe28b16c0b2f1e0662eb1d7"
     git_file             = "terraform/aws/lambda.tf"
@@ -29,16 +42,18 @@ EOF
   }
 }
 
+# --- Lambda function protegida con KMS ---
 resource "aws_lambda_function" "analysis_lambda" {
-  # lambda have plain text secrets in environment variables
   filename      = "resources/lambda_function_payload.zip"
   function_name = "${local.resource_prefix.value}-analysis"
-  role          = "${aws_iam_role.iam_for_lambda.arn}"
+  role          = aws_iam_role.iam_for_lambda.arn
   handler       = "exports.test"
 
-  source_code_hash = "${filebase64sha256("resources/lambda_function_payload.zip")}"
+  source_code_hash = filebase64sha256("resources/lambda_function_payload.zip")
+  runtime          = "nodejs12.x"
 
-  runtime = "nodejs12.x"
+  # FIX: usar KMS CMK para variables de entorno
+  kms_key_arn = aws_kms_key.lambda_env.arn
 
   environment {
     variables = {
@@ -46,6 +61,7 @@ resource "aws_lambda_function" "analysis_lambda" {
       secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
     }
   }
+
   tags = {
     git_commit           = "5c6b5d60a8aa63a5d37e60f15185d13a967f0542"
     git_file             = "terraform/aws/lambda.tf"

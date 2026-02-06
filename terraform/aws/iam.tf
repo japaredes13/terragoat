@@ -18,9 +18,6 @@ resource "aws_iam_user" "user" {
 
 }
 
-resource "aws_iam_access_key" "user" {
-  user = aws_iam_user.user.name
-}
 
 resource "aws_iam_user_policy" "userpolicy" {
   name = "excess_policy"
